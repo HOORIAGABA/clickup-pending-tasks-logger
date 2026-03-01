@@ -1,0 +1,790 @@
+{
+  "name": "daily-pending-tasks-tracker-DevOps",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Usually triggered once per assignment → we expect one item\nconst triggerItem = $input.first();\nif (!triggerItem) {\n  return [{ json: { error: \"No input item received\" } }];\n}\n\n// Helper: safe date formatting (PKT = Asia/Karachi)\nfunction formatPktDate(timestampMs) {\n  if (!timestampMs || isNaN(Number(timestampMs))) return \"N/A\";\n  const date = new Date(Number(timestampMs));\n  return date.toLocaleString('en-US', {\n    timeZone: 'Asia/Karachi',\n    year: 'numeric',\n    month: 'short',\n    day: 'numeric',\n    hour: '2-digit',\n    minute: '2-digit',\n    hour12: true\n  });\n}\n\n// ── Get task data ── preferably from \"Get a task\" node that uses task_id ──\nconst taskItem = $('Get a task').first();\n\nif (!taskItem?.json?.name) {\n  // Fallback: try to use data directly from trigger if \"Get a task\" failed/empty\n  const fallbackName = triggerItem.json.name || triggerItem.json.task?.name || \"Unnamed Task\";\n  const fallbackStart  = triggerItem.json.start_date  || triggerItem.json.task?.start_date;\n  const fallbackDue    = triggerItem.json.due_date    || triggerItem.json.task?.due_date;\n  const fallbackCreated = triggerItem.json.date_created || triggerItem.json.task?.date_created;\n\n  var name       = fallbackName.trim();\n  var startFmt   = formatPktDate(fallbackStart);\n  var endFmt     = formatPktDate(fallbackDue);\n  var createdFmt = formatPktDate(fallbackCreated);\n} else {\n  // Preferred path: data from \"Get a task\" node\n  var name       = (taskItem.json.name || \"Unnamed Task\").trim();\n  var startFmt   = formatPktDate(taskItem.json.start_date);\n  var endFmt     = formatPktDate(taskItem.json.due_date);\n  var createdFmt = formatPktDate(taskItem.json.date_created);\n}\n\n// ── Build single task line ───────────────────────────────────────────\nconst taskLine = `• ${name}\\n   Created: ${createdFmt}\\n   Start:   ${startFmt}\\n   End:     ${endFmt}`;\n\nconst formattedTasks = taskLine;\n\n\n// ── Get member info (usually prepared in \"Edit Fields1\") ─────────────\nconst memberName = $('Edit Fields4').first()?.json?.[' Member Name'] \n                || $('Edit Fields4').first()?.json?.MemberName \n                || triggerItem.json.assignee?.username\n                || triggerItem.json.history_items?.[0]?.after?.username\n                || \"—\";\n\nconst memberId = $('Edit Fields4').first()?.json?.[' Member ID'] \n              || $('Edit Fields4').first()?.json?.MemberId \n              || triggerItem.json.assignee?.id\n              || triggerItem.json.history_items?.[0]?.after?.id\n              || \"—\";\n\n// Date context\nconst todayDate = $input.first().json.formattedDate \n               || triggerItem.json.formattedDate \n               || new Date().toISOString().split('T')[0];\n\nconst uniqueKey = `${memberId}_${todayDate}`.trim();\n \nconst taskCount = [taskLine].length;\n// ── Final output ─────────────────────────────────────────────────────\nreturn [{\n  json: {\n    MemberName:       memberName,\n    MemberId:         memberId,\n    TodayDate:        todayDate,\n    unique_key:       uniqueKey,\n\n    PendingTasks:    formattedTasks,        // single formatted string\n    PendingTaskCount: taskCount,\n    // AssignedTasksArray: [taskLine],          // still array → easier to append later\n\n    // Optional – very useful for debugging\n    // TaskName:         name,\n    // CreatedFmt:       createdFmt,\n    // StartFmt:         startFmt,\n    // DueFmt:           endFmt,\n    // SourceNodeUsed:   taskItem?.json?.name ? \"Get a task\" : \"trigger fallback\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        0
+      ],
+      "id": "043f54f2-0209-4057-a085-c64df00ba1da",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        160,
+        0
+      ],
+      "id": "da18ac11-847a-43e2-a012-f97c9f9895ad",
+      "name": "Date & Time"
+    },
+    {
+      "parameters": {
+        "operation": "formatDate",
+        "date": "={{ $json.currentDate }}",
+        "format": "custom",
+        "customFormat": "dd/MM/yyyy",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        384,
+        0
+      ],
+      "id": "4bc974c9-24f7-444d-b530-f937deb8337c",
+      "name": "Date & Time3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1cca6822-e859-4bcd-a030-5e055d7310d9",
+              "name": " Member Name",
+              "value": "={{ $json.assignees[0].username }}",
+              "type": "string"
+            },
+            {
+              "id": "ff32a537-8657-49ee-826b-9c3f8639fff7",
+              "name": " Member ID",
+              "value": "={{ $json.assignees[0].id }} ",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -64,
+        0
+      ],
+      "id": "1ce3b284-10cd-4758-a5fc-72150bcfbb4c",
+      "name": "Edit Fields4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "db7e23ca-872f-494f-b9b0-33ebadf7b08d",
+              "leftValue": "={{ $json.status.status }}",
+              "rightValue": "pending by frontend",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "3f48c7df-8e6c-4e43-a460-7a76dfae11ce",
+              "leftValue": "={{ $json.status.status }}",
+              "rightValue": "pending by backend",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "32279f8b-c140-4ce8-8655-0e292703c343",
+              "leftValue": "={{ $json.status.status }}",
+              "rightValue": "pending by ai",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -288,
+        0
+      ],
+      "id": "db99390f-72ad-4ad6-882b-ba50acaee559",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "id": "={{ $json.task_id }}",
+        "includeSubtasks": true
+      },
+      "type": "n8n-nodes-base.clickUp",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        0
+      ],
+      "id": "45c1cb5d-713d-4173-881d-e60cadcc9dff",
+      "name": "Get a task",
+      "credentials": {
+        "clickUpApi": {
+          "id": "FGZ36444ame9ffAE",
+          "name": "ClickUp account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "team": "90181787093",
+        "events": [
+          "taskStatusUpdated"
+        ],
+        "filters": {
+          "listId": "901812001754",
+          "spaceId": "90187174239"
+        }
+      },
+      "type": "n8n-nodes-base.clickUpTrigger",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        0
+      ],
+      "id": "90c2edf3-bd1e-4d41-b4bf-c618516d5e5b",
+      "name": "ClickUp Trigger",
+      "webhookId": "4a6621ee-3cb0-450d-9fba-500d0a71a52d",
+      "credentials": {
+        "clickUpApi": {
+          "id": "FGZ36444ame9ffAE",
+          "name": "ClickUp account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1gSjiaV900li7-5NIU1SpiYfI3ZJK15H1oB3JuOXhcs8",
+          "mode": "list",
+          "cachedResultName": "Web Team n8n Reports",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gSjiaV900li7-5NIU1SpiYfI3ZJK15H1oB3JuOXhcs8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1541158572,
+          "mode": "list",
+          "cachedResultName": "DailyLogsData",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gSjiaV900li7-5NIU1SpiYfI3ZJK15H1oB3JuOXhcs8/edit#gid=1541158572"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "        unique_key",
+              "lookupValue": "={{ $json.unique_key }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "95607a5a-43ac-4697-ad67-5643578c6a95",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fnSCdUg3fhYq3oJ4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2bdc5bd7-1567-4a7f-8e20-f3345e8d2bdc",
+              "name": "oldTasks",
+              "value": "={{ $('Get row(s) in sheet').item.json['Pending Tasks'] || \" \"}}",
+              "type": "string"
+            },
+            {
+              "id": "ea646ebb-99ee-4dd8-9457-60986e0e9d1e",
+              "name": "newTasks",
+              "value": "={{ $('Edit Fields9').item.json.PendingTasks }}",
+              "type": "string"
+            },
+            {
+              "id": "89afe539-1d20-4441-9476-6e87163e98bd",
+              "name": "old_No_of_Pending_Tasks",
+              "value": "={{ $json.No_of_Pending_Tasks || 0 }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1280,
+        0
+      ],
+      "id": "39a5a85d-0f90-4f44-94f8-deac6e3228fd",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ece99218-98c9-4bb2-ae7f-0e75663ad658",
+              "name": "combinedTasks",
+              "value": "={{ $json.oldTasks ? $json.oldTasks + \"\\n \" + $json.newTasks : + $json.newTasks }}",
+              "type": "string"
+            },
+            {
+              "id": "25fb2e6e-2205-4480-abd1-050f4c2d2646",
+              "name": "new_no_of_pending_task",
+              "value": "={{ $json.old_No_of_Pending_Tasks }}",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1952,
+        0
+      ],
+      "id": "f34f34f0-be85-497a-a47a-8d916cd2c4ae",
+      "name": "Edit Fields8"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1gSjiaV900li7-5NIU1SpiYfI3ZJK15H1oB3JuOXhcs8",
+          "mode": "list",
+          "cachedResultName": "Web Team n8n Reports",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gSjiaV900li7-5NIU1SpiYfI3ZJK15H1oB3JuOXhcs8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1541158572,
+          "mode": "list",
+          "cachedResultName": "DailyLogsData",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1gSjiaV900li7-5NIU1SpiYfI3ZJK15H1oB3JuOXhcs8/edit#gid=1541158572"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "        unique_key": "={{ $('Code in JavaScript').item.json.unique_key }}",
+            "Date": "={{ $('Code in JavaScript').item.json.TodayDate }} ",
+            "Member ID": "={{ $('Code in JavaScript').item.json.MemberId }} ",
+            "Member Name": "={{ $('Code in JavaScript').item.json.MemberName }} ",
+            "Pending Tasks": "={{ $json.combinedTasks }}",
+            "No_of_Pending_Tasks": "={{ $json.new_no_of_pending_task + 1  }}"
+          },
+          "matchingColumns": [
+            "        unique_key"
+          ],
+          "schema": [
+            {
+              "id": "        unique_key",
+              "displayName": "        unique_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Member ID",
+              "displayName": "Member ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Member Name",
+              "displayName": "Member Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Productive Days",
+              "displayName": " Productive Days",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Projects",
+              "displayName": "Projects",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "No_of_Projects_Working_On",
+              "displayName": "No_of_Projects_Working_On",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tasks Assigned Today",
+              "displayName": "Tasks Assigned Today",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "No_of_Assigned_Tasks",
+              "displayName": "No_of_Assigned_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Pending Tasks",
+              "displayName": "Pending Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "No_of_Pending_Tasks",
+              "displayName": "No_of_Pending_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "In-Progress Tasks",
+              "displayName": "In-Progress Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "No_of_In-Progress_Tasks",
+              "displayName": "No_of_In-Progress_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Active Tasks",
+              "displayName": "Active Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "No_of_Active_Tasks",
+              "displayName": "No_of_Active_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Repeted Tasks",
+              "displayName": "Repeted Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "No_of_Repeted_Tasks",
+              "displayName": "No_of_Repeted_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Completed Tasks",
+              "displayName": "Completed Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "No_of_Completed_Tasks",
+              "displayName": "No_of_Completed_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "In-Testing Tasks",
+              "displayName": "In-Testing Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "No_of_InTesting_Tasks",
+              "displayName": "No_of_InTesting_Tasks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TeamName",
+              "displayName": "TeamName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ReportMonth",
+              "displayName": "ReportMonth",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2176,
+        0
+      ],
+      "id": "3826d357-ea61-4e7d-bc37-456bdb0274e4",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fnSCdUg3fhYq3oJ4",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "858640ac-7ecf-4f32-b670-d3eb224329a0",
+              "name": "PendingTasks",
+              "value": "={{ $json.PendingTasks }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        832,
+        0
+      ],
+      "id": "b565ccf9-6529-4c8a-9e4e-df56c793ab52",
+      "name": "Edit Fields9"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f84546ec-4a60-496e-af44-0381cac48f37",
+              "leftValue": "={{ $json.shouldAppend }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "8e8cd158-266c-4ac7-a954-7de7a5aba4b0",
+              "leftValue": false,
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1728,
+        0
+      ],
+      "id": "ea33712e-511d-448b-b667-977736a124ce",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================================\n//  Advanced check: duplicate prevention + project tag upgrade\n// ============================================================================\n\nconst oldText = ($input.first().json.oldTasks  || \"\").trim();\nconst newTask = ($input.first().json.newTasks  || \"\").trim();\n\nif (!newTask.trim()) {\n  return [{ json: { ...$json, shouldAppend: false, shouldUpdateProject: false, action: \"no-new-task\" } }];\n}\n\nif (!oldText.trim()) {\n  return [{ json: { ...$json, shouldAppend: true, shouldUpdateProject: false, action: \"first-task\" } }];\n}\n\n// ── Helpers ────────────────────────────────────────────────────────────────\nfunction normalize(str) {\n  return str.replace(/\\s+/g, ' ').trim().toLowerCase();\n}\n\nfunction getTaskSignature(taskBlock) {\n  // Try to get first line (bullet + title) as identifier\n  const lines = taskBlock.split('\\n').map(l => l.trim());\n  const firstLine = lines.find(l => l.startsWith('•')) || lines[0] || '';\n  return normalize(firstLine.replace(/^•\\s*/, ''));\n}\n\nfunction hasProjectTag(block) {\n  return /project:\\s*/i.test(block);\n}\n\nfunction extractProject(block) {\n  const match = block.match(/project:\\s*([^\\n]+)/i);\n  return match ? match[1].trim() : '';\n}\n\n// ── Identify the task ──────────────────────────────────────────────────────\nconst newSignature = getTaskSignature(newTask);\nconst newHasProject = hasProjectTag(newTask);\nconst newProject    = extractProject(newTask);\n\n// Search old text for matching task\nlet foundIndex = -1;\nlet oldTaskBlock = '';\nlet oldHasProject = false;\n\nconst oldBlocks = oldText.split('\\n\\n').map(b => b.trim()).filter(Boolean);\n\nfor (let i = 0; i < oldBlocks.length; i++) {\n  const block = oldBlocks[i];\n  const sig = getTaskSignature(block);\n  if (sig === newSignature) {\n    foundIndex = i;\n    oldTaskBlock = block;\n    oldHasProject = hasProjectTag(block);\n    break;\n  }\n}\n\nconst isDuplicate = foundIndex !== -1;\n\n// ── Decision logic ─────────────────────────────────────────────────────────\nlet shouldAppend = false;\nlet shouldUpdateProject = false;\nlet updatedText = oldText;\nlet action = \"append\";\n\nif (!isDuplicate) {\n  // Completely new task → append\n  shouldAppend = true;\n  action = \"new-task-append\";\n} else {\n  // Task already exists\n  if (!oldHasProject && newHasProject) {\n    // Upgrade: old version had no project → now has → replace block\n    shouldUpdateProject = true;\n    action = \"update-project-tag\";\n\n    // Replace old block with new one\n    const oldBlocksCopy = [...oldBlocks];\n    oldBlocksCopy[foundIndex] = newTask.trim();\n    updatedText = oldBlocksCopy.join('\\n\\n');\n  } else {\n    // Already exists and project status not improved → skip append\n    shouldAppend = false;\n    action = \"skip-duplicate\";\n  }\n}\n\nreturn [{\n  json: {\n    ...$json,\n    shouldAppend,\n    shouldUpdateProject,\n    combinedTasks: shouldUpdateProject ? updatedText : (\n      shouldAppend\n        ? (oldText ? oldText + \"\\n\\n\" + newTask : newTask)\n        : oldText\n    ),\n    actionTaken: action,\n    taskSignature: newSignature,\n    foundInOld: isDuplicate,\n    oldHadProject: oldHasProject,\n    newHasProject,\n    newProjectTag: newProject || '(none)'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        0
+      ],
+      "id": "cf9c4e00-7f5a-4486-bcb5-c05e382ff607",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Date & Time": {
+      "main": [
+        [
+          {
+            "node": "Date & Time3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Date & Time3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields4": {
+      "main": [
+        [
+          {
+            "node": "Date & Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a task": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ClickUp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get a task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields8": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields9": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "06be2ad4-26d3-4afd-ab17-55916b4753eb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bfefda8b8561e999840c4adfac23e386ed9e4cb2425c2372729c1876c847c669"
+  },
+  "id": "q0evCGVioD7vDDPk",
+  "tags": []
+}
